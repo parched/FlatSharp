@@ -135,7 +135,7 @@ public class ValueStructSchemaModel : BaseSchemaModel
 
         this.Attributes.EmitAsMetadata(writer);
         writer.AppendLine($"[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit{size})]");
-        writer.AppendLine($"public partial struct {this.Name}");
+        writer.AppendLine($"public partial struct {this.Name}: System.IEquatable<{this.Name}>");
         using (writer.WithBlock())
         {
             foreach (var field in this.fields)
@@ -146,6 +146,27 @@ public class ValueStructSchemaModel : BaseSchemaModel
                 field.Attributes.EmitAsMetadata(writer);
                 writer.AppendLine($"{field.Visibility} {field.TypeName} {field.Name};");
                 writer.AppendLine();
+            }
+
+            writer.AppendLine($"public override bool Equals(object? obj) => obj is {this.Name} other && this.Equals(other);");
+            writer.AppendLine($"public bool Equals({this.Name} other)");
+            using (writer.WithBlock())
+            {
+                writer.AppendLine("return true");
+                foreach (var field in this.fields)
+                {
+                    writer.AppendLine($"&& EqualityComparer<{field.TypeName}>.Default.Equals({field.Name}, other.{field.Name})");
+                }
+                writer.AppendLine(";");
+            }
+            writer.AppendLine($"public static bool operator ==({this.Name} left, {this.Name} right) => left.Equals(right);");
+            writer.AppendLine($"public static bool operator !=({this.Name} left, {this.Name} right) => !left.Equals(right);");
+            writer.AppendLine("public override int GetHashCode()");
+            using (writer.WithBlock())
+            {
+                // TODO: take all
+                var args = string.Join(", ", this.fields.Take(8).Select(x => $"EqualityComparer<{x.TypeName}>.Default.GetHashCode({x.Name})"));
+                writer.AppendLine($"return HashCode.Combine({args});");
             }
 
             foreach (var sv in this.structVectors)

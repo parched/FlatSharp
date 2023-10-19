@@ -67,6 +67,7 @@ public abstract class BaseReferenceTypeSchemaModel : BaseSchemaModel
     protected sealed override void OnWriteCode(CodeWriter writer, CompileContext context)
     {
         this.EmitClassDefinition(writer, context);
+        writer.AppendLine($", System.IEquatable<{this.Name}>");
 
         using (writer.WithBlock())
         {
@@ -93,6 +94,29 @@ public abstract class BaseReferenceTypeSchemaModel : BaseSchemaModel
 
                 writer.AppendLine();
                 model.WriteCode(writer);
+            }
+
+            writer.AppendLine($"public override bool Equals(object? obj) => Equals(obj as {this.Name});");
+            writer.AppendLine($"public virtual bool Equals({this.Name}? other)");
+            using (writer.WithBlock())
+            {
+                writer.AppendLine("return !(other is null)");
+                foreach (var property in this.properties.OrderBy(x => x.Key))
+                {
+                    var field = property.Value;
+                    writer.AppendLine($"&& EqualityComparer<{field.GetTypeName()}>.Default.Equals({field.FieldName}, other.{field.FieldName})");
+                }
+                writer.AppendLine(";");
+            }
+            writer.AppendLine($"public static bool operator ==({this.Name}? left, {this.Name}? right) => (object)left == right || (left?.Equals(right) ?? false);");
+            writer.AppendLine($"public static bool operator !=({this.Name}? left, {this.Name}? right) => !(left == right);");
+            writer.AppendLine("public override int GetHashCode()");
+            using (writer.WithBlock())
+            {
+                // TODO: take all
+                var fields = this.properties.OrderBy(x => x.Key).Select(x => x.Value).Take(8);
+                var args = string.Join(", ", fields.Select(x => $"EqualityComparer<{x.GetTypeName()}>.Default.GetHashCode({x.FieldName})"));
+                writer.AppendLine($"return HashCode.Combine({args});");
             }
 
             foreach (var sv in this.structVectors)
