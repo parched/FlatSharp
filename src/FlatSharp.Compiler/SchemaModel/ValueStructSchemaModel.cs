@@ -136,6 +136,7 @@ public class ValueStructSchemaModel : BaseSchemaModel
         this.Attributes.EmitAsMetadata(writer);
         writer.AppendLine($"[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit{size})]");
         writer.AppendLine($"public partial struct {this.Name}");
+        writer.AppendLine($": System.IEquatable<{this.Name}>");
         using (writer.WithBlock())
         {
             foreach (var field in this.fields)
@@ -147,6 +148,17 @@ public class ValueStructSchemaModel : BaseSchemaModel
                 writer.AppendLine($"{field.Visibility} {field.TypeName} {field.Name};");
                 writer.AppendLine();
             }
+
+            string typeNames = string.Join(", ", this.fields.Select(x => x.TypeName));
+            string names = string.Join(", ", this.fields.Select(x => x.Name));
+            string tupleType = this.fields.Count == 0 ? "System.ValueTuple" : this.fields.Count == 1 ? $"System.ValueTuple<{typeNames}>" : $"({typeNames})";
+            string tupleValue = this.fields.Count < 2 ? $"System.ValueTuple.Create({names})" : $"({names})";
+            writer.AppendLine($"public {tupleType} ToTuple() => {tupleValue};");
+            writer.AppendLine($"public override bool Equals(object? obj) => obj is {this.Name} other && this.Equals(other);");
+            writer.AppendLine($"public bool Equals({this.Name} other) => ToTuple().Equals(other.ToTuple());");
+            writer.AppendLine($"public static bool operator ==({this.Name} left, {this.Name} right) => left.Equals(right);");
+            writer.AppendLine($"public static bool operator !=({this.Name} left, {this.Name} right) => !left.Equals(right);");
+            writer.AppendLine("public override int GetHashCode() => ToTuple().GetHashCode();");
 
             foreach (var sv in this.structVectors)
             {
