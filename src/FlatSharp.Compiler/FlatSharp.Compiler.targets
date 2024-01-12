@@ -83,17 +83,17 @@
         </Task>
     </UsingTask>
 
-    <!-- Tell Visual Studio that fbs files can result in build changes. 
-       https://github.com/dotnet/project-system/blob/cd275918ef9f181f6efab96715a91db7aabec832/docs/up-to-date-check.md -->
     <ItemGroup>
-        <UpToDateCheckInput Include="@(FlatSharpSchema)" />
+        <GeneratedFbs Include="$(IntermediateOutputPath)/FlatSharp.generated.cs" />
     </ItemGroup>
 
-    <Target Name="FlatSharpFbsCompile" BeforeTargets="ResolveAssemblyReferences" Condition=" '@(FlatSharpSchema)' != '' ">
+    <Target Name="FlatSharpFbsCompile" BeforeTargets="ResolveAssemblyReferences"
+        Inputs="@(FlatSharpSchema)" Outputs="@(GeneratedFbs)"
+        Condition=" '@(FlatSharpSchema)' != '' ">
         <ProcessFlatSharpSchema Inputs="@(FlatSharpSchema)">
             <Output TaskParameter="IncludeDirectories" PropertyName="Includes" />
         </ProcessFlatSharpSchema>
-        
+
         <!-- find compiler and set base command -->
         <PropertyGroup>
             <CompilerPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)\..\tools\net6.0\FlatSharp.Compiler.dll'))</CompilerPath>
@@ -136,7 +136,6 @@
         <Exec Command="$(CompilerCommand)" CustomErrorRegularExpression=".*" />
 
         <ItemGroup>
-            <GeneratedFbs Include="$(IntermediateOutputPath)*.generated.cs" />
             <Compile Include="@(GeneratedFbs)" />
             <FileWrites Include="@(GeneratedFbs)" />
         </ItemGroup>
