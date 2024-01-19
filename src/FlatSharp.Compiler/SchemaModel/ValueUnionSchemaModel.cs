@@ -170,6 +170,8 @@ public class ValueUnionSchemaModel : BaseSchemaModel
             writer.AppendLine($"public static bool operator !=({this.Name} left, {this.Name} right) => !left.Equals(right);");
             writer.AppendLine("public override int GetHashCode() => (this.Discriminator, this.value).GetHashCode();");
 
+            writer.AppendLine($"public override string ToString() => $\"{this.Name} {{{{ {{this.value}} }}}}\";");
+
 
             foreach (var item in innerTypes)
             {

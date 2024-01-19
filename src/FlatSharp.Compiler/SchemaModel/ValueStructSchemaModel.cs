@@ -160,6 +160,11 @@ public class ValueStructSchemaModel : BaseSchemaModel
             writer.AppendLine($"public static bool operator !=({this.Name} left, {this.Name} right) => !left.Equals(right);");
             writer.AppendLine("public override int GetHashCode() => ToTuple().GetHashCode();");
 
+            // This matches C# records
+            string fieldStrings = string.Join(", ", this.fields.Select(x => $"{x.Name} = {{this.{x.Name}}}"));
+            string fieldStringsWithSpace = this.fields.Count == 0 ? " " : $" {fieldStrings} ";
+            writer.AppendLine($"public override string ToString() => $\"{this.Name} {{{{{fieldStringsWithSpace}}}}}\";");
+
             foreach (var sv in this.structVectors)
             {
                 writer.AppendSummaryComment($"Gets the number of items in the {sv.Name} vector.");
