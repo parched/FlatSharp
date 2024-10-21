@@ -279,6 +279,12 @@ internal class DeserializeClassDefinition
 
                 {string.Join("\r\n", this.instanceFieldDefinitions.Values)}
 
+                [{typeof(MethodImplAttribute).GetGlobalCompilableTypeName()}({typeof(MethodImplOptions).GetGlobalCompilableTypeName()}.AggressiveInlining)]
+                public static {this.ClassName}<TInputBuffer> GetOrCreate(TInputBuffer buffer, int offset, short remainingDepth)
+                {{
+                    {this.GetGetOrCreateMethodBody()}
+                }}
+
                 {this.GetCtorMethodDefinition(onDeserializedStatement, baseParams)}
 
                 {typeof(Type).GetGlobalCompilableTypeName()} {interfaceGlobalName}.{nameof(IFlatBufferDeserializedObject.TableOrStructType)} => typeof({typeModel.GetCompilableTypeName()});
@@ -350,6 +356,29 @@ internal class DeserializeClassDefinition
                     {typeof(SerializationHelpers).GetGlobalCompilableTypeName()}.{nameof(SerializationHelpers.CombineMask)}(ref this.{GetHasValueFieldName(itemModel)}, {GetHasValueFieldMask(itemModel)});
                 }}
                 return this.{GetFieldName(itemModel)};
+            ";
+        }
+    }
+
+    protected virtual string GetGetOrCreateMethodBody()
+    {
+        if (!this.typeModel.SerializesInline)
+        {
+            return $@"
+                if (buffer.Cache.TryGetValue(offset, out var value))
+                {{
+                    return ({this.ClassName}<TInputBuffer>)value;
+                }}
+                {this.ClassName}<TInputBuffer>? item = new {this.ClassName}<TInputBuffer>(buffer, offset, remainingDepth);
+                buffer.Cache.Add(offset, item);
+                return item;
+            ";
+        }
+        else
+        {
+            return $@"
+                {this.ClassName}<TInputBuffer>? item = new {this.ClassName}<TInputBuffer>(buffer, offset, remainingDepth);
+                return item;
             ";
         }
     }
