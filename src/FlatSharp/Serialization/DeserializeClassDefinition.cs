@@ -406,6 +406,20 @@ internal class DeserializeClassDefinition
         }
         else
         {
+            if (!this.typeModel.ClrType.IsValueType)
+            {
+                return $@"
+                if (buffer.Cache.TryGetValue(offset, out var value))
+                {{
+                    return ({this.ClassName}<TInputBuffer>)value;
+                }}
+                {this.ClassName}<TInputBuffer>? item = new {this.ClassName}<TInputBuffer>();
+                item.Initialize(buffer, offset, remainingDepth);
+                buffer.Cache.Add(offset, item);
+                return item;
+            ";
+            }
+
             return $@"
                 {this.ClassName}<TInputBuffer>? item = new {this.ClassName}<TInputBuffer>();
                 item.Initialize(buffer, offset, remainingDepth);

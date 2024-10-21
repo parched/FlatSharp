@@ -46,6 +46,8 @@ public struct ReadOnlyMemoryInputBuffer : IInputBuffer
         get => this.pointer.memory.Length;
     }
 
+    public readonly Dictionary<int, object> Cache { get; } = new Dictionary<int, object>();
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public byte ReadByte(int offset)
     {

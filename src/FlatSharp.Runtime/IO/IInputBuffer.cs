@@ -38,6 +38,8 @@ public interface IInputBuffer
     /// </summary>
     int Length { get; }
 
+    Dictionary<int, object> Cache { get; }
+
     /// <summary>
     /// Reads the byte at the given offset.
     /// </summary>

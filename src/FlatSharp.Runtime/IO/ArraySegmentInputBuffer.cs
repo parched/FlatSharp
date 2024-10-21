@@ -36,6 +36,8 @@ public struct ArraySegmentInputBuffer : IInputBuffer
 
     public int Length => this.pointer.segment.Count;
 
+    public readonly Dictionary<int, object> Cache { get; } = new Dictionary<int, object>();
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public byte ReadByte(int offset)
     {
