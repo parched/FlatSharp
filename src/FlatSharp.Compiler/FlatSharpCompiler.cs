@@ -625,7 +625,7 @@ public class FlatSharpCompiler
         {
             if (csharp is not null)
             {
-                csharp = Instrument("PrettyPrint", options, () => RoslynSerializerGenerator.GetFormattedText(csharp));
+                // csharp = Instrument("PrettyPrint", options, () => RoslynSerializerGenerator.GetFormattedText(csharp));
             }
         }
 
