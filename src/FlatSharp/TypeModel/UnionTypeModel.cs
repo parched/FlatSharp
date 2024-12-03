@@ -181,27 +181,25 @@ $@"
                 // So, we need to do the normal allocate space dance here, since we're writing
                 // a pointer to a struct.
                 inlineAdjustment =$@"
-                    var writeOffset = context.{nameof(SerializationContext.AllocateSpace)}({elementModel.PhysicalLayout.Single().InlineSize}, {elementModel.PhysicalLayout.Single().Alignment});
-                    {context.SpanWriterVariableName}.{nameof(SpanWriterExtensions.WriteUOffset)}(span, writeOffset, {context.OffsetVariableName}.offset1);";
+                    offset = context.{nameof(SerializationContext.AllocateSpace)}({elementModel.PhysicalLayout.Single().InlineSize}, {elementModel.PhysicalLayout.Single().Alignment});
+                    ";
             }
             else
             {
-                inlineAdjustment = $"var writeOffset = {context.OffsetVariableName}.offset1;";
+                inlineAdjustment = $"offset = ";
             }
 
             var caseContext = context with
             {
                 ValueVariableName = $"{context.ValueVariableName}.Item{unionIndex}",
-                OffsetVariableName = "writeOffset",
-                IsOffsetByRef = false,
+                OffsetVariableName = "offset",
             };
 
             string @case =
 $@"
                 case {enumVal}:
                 {{
-                    {inlineAdjustment}
-                    {caseContext.GetSerializeInvocation(elementModel.ClrType)};
+                    {inlineAdjustment}{caseContext.GetSerializeInvocation(elementModel.ClrType)};
                 }}
                 break;";
 
@@ -210,10 +208,7 @@ $@"
 
         string serializeBlock = $@"
             byte discriminatorValue = {context.ValueVariableName}.Discriminator;
-            {context.SpanWriterVariableName}.{nameof(SpanWriter.WriteByte)}(
-                {context.SpanVariableName}, 
-                discriminatorValue, 
-                {context.OffsetVariableName}.offset0);
+            int offset = 0;
 
             switch (discriminatorValue)
             {{
@@ -221,7 +216,9 @@ $@"
                 default: 
                     {typeof(FSThrow).GGCTN()}.{nameof(FSThrow.InvalidOperation_InvalidUnionDiscriminator)}<{this.GGCTN()}>(discriminatorValue);
                     break;
-            }}";
+            }}
+            return (discriminatorValue, {context.OffsetVariableName});
+            ";
 
         return new CodeGeneratedMethod(serializeBlock);
     }

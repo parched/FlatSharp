@@ -23,28 +23,27 @@ namespace FlatSharp.Internal;
 /// </summary>
 public static class SpanWriterExtensions
 {
-    public static void WriteReadOnlyByteMemoryBlock<TSpanWriter>(
+    public static int WriteReadOnlyByteMemoryBlock<TSpanWriter>(
         this TSpanWriter spanWriter,
         Span<byte> span,
         ReadOnlyMemory<byte> memory,
-        int offset,
         SerializationContext ctx) where TSpanWriter : ISpanWriter
     {
         int numberOfItems = memory.Length;
         int vectorStartOffset = ctx.AllocateVector(itemAlignment: sizeof(byte), numberOfItems, sizePerItem: sizeof(byte));
 
-        spanWriter.WriteUOffset(span, vectorStartOffset, offset);
         spanWriter.WriteInt(span, numberOfItems, vectorStartOffset);
 
         memory.Span.CopyTo(span.Slice(vectorStartOffset + sizeof(uint)));
+
+        return vectorStartOffset;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void UnsafeWriteSpan<TSpanWriter, TElement>(
+    public static int UnsafeWriteSpan<TSpanWriter, TElement>(
         this TSpanWriter spanWriter,
         Span<byte> span,
         Span<TElement> buffer,
-        int offset,
         int alignment,
         SerializationContext ctx) where TSpanWriter : ISpanWriter where TElement : unmanaged
     {
@@ -58,12 +57,13 @@ public static class SpanWriterExtensions
             numberOfItems,
             sizePerItem: Unsafe.SizeOf<TElement>());
 
-        spanWriter.WriteUOffset(span, vectorStartOffset, offset);
         spanWriter.WriteInt(span, numberOfItems, vectorStartOffset);
 
         var start = span.Slice(vectorStartOffset + sizeof(uint), checked(numberOfItems * Unsafe.SizeOf<TElement>()));
 
         MemoryMarshal.Cast<TElement, byte>(buffer).CopyTo(start);
+
+        return vectorStartOffset;
     }
 
     /// <summary>
@@ -90,20 +90,14 @@ public static class SpanWriterExtensions
     {
         var encoding = SerializationHelpers.Encoding;
 
-        // Allocate more than we need and then give back what we don't use.
-        int maxItems = encoding.GetMaxByteCount(value.Length) + 1;
-        int stringStartOffset = context.AllocateVector(sizeof(byte), maxItems, sizeof(byte));
+        int count = encoding.GetByteCount(value);
+        int stringStartOffset = context.AllocateVector(sizeof(byte), count + 1, sizeof(byte));
 
-        int bytesWritten = spanWriter.GetStringBytes(span.Slice(stringStartOffset + sizeof(uint), maxItems), value, encoding);
+        int bytesWritten = spanWriter.GetStringBytes(span.Slice(stringStartOffset + sizeof(uint)), value, encoding);
+        spanWriter.WriteInt(span, bytesWritten, stringStartOffset);
 
         // null teriminator
         span[stringStartOffset + bytesWritten + sizeof(uint)] = 0;
-
-        // write length
-        spanWriter.WriteInt(span, bytesWritten, stringStartOffset);
-
-        // give back unused space. Account for null terminator.
-        context.Offset -= maxItems - (bytesWritten + 1);
 
         return stringStartOffset;
     }

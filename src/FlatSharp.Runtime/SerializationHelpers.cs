@@ -71,14 +71,25 @@ public static class SerializationHelpers
     }
 
     /// <summary>
-    /// Returns the number of padding bytes to be added to the given offset to acheive the given alignment.
+    /// Returns the number of padding bytes to be added to the given offset to achieve the given alignment.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetAlignmentError(int offset, int alignment)
     {
-        Debug.Assert(alignment == 1 || alignment % 2 == 0);
+        Debug.Assert((alignment & (alignment - 1)) == 0, "Alignment must be a power of 2.");
         return (-offset) & (alignment - 1);
     }
+
+    /// <summary>
+    /// Returns the given offset reduced, if necessary, to achieve the given alignment.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int AlignBackwards(int offset, int alignment)
+    {
+        Debug.Assert((alignment & (alignment - 1)) == 0, "Alignment must be a power of 2.");
+        return offset & ~(alignment - 1);
+    }
+
 
     /// <summary>
     /// Throws an InvalidDataException if the given item is null.

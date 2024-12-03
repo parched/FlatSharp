@@ -131,7 +131,9 @@ public class NullableTypeModel : RuntimeTypeModel
         // NULL FORGIVENESS
         string body = (context with { ValueVariableName = $"{context.ValueVariableName}!.Value" }).GetSerializeInvocation(this.underlyingType);
 
-        return new CodeGeneratedMethod($"{body};")
+        string returnStatement = underlyingTypeModel.SerializesInline ? "" : "return ";
+
+        return new CodeGeneratedMethod($"{returnStatement}{body};")
         {
             IsMethodInline = true,
         };

@@ -39,15 +39,9 @@ public interface ISharedStringWriter
     /// </summary>
     /// <param name="spanWriter">The spanwriter.</param>
     /// <param name="data">The span.</param>
-    /// <param name="offset">The location in the buffer of the uoffset to the string.</param>
     /// <param name="value">The string to write.</param>
     /// <param name="context">The serialization context.</param>
-    void WriteSharedString<TSpanWriter>(TSpanWriter spanWriter, Span<byte> data, int offset, string value, SerializationContext context)
-        where TSpanWriter : ISpanWriter;
-
-    /// <summary>
-    /// Flushes any pending writes. Invoked at the end of a serialization operation.
-    /// </summary>
-    void FlushWrites<TSpanWriter>(TSpanWriter writer, Span<byte> data, SerializationContext context)
+    /// <returns>The location in the buffer of the string</returns>
+    int WriteSharedString<TSpanWriter>(TSpanWriter spanWriter, Span<byte> data, string value, SerializationContext context)
         where TSpanWriter : ISpanWriter;
 }

@@ -77,7 +77,7 @@ public interface ISerializer<T>
     /// <param name="writer">The span writer.</param>
     /// <param name="destination">The span to write to.</param>
     /// <param name="item">The object to serialize.</param>
-    /// <returns>The number of bytes written.</returns>
+    /// <returns>The position of the item in the destination.</returns>
     int Write<TSpanWriter>(TSpanWriter writer, Span<byte> destination, T item) where TSpanWriter : ISpanWriter;
 
     /// <summary>

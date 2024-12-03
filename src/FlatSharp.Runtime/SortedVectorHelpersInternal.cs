@@ -59,12 +59,11 @@ public static class SortedVectorHelpersInternal
     [EditorBrowsable(EditorBrowsableState.Never)]
     public static void SortVector<TSpanComparer>(
         Span<byte> buffer,
-        int vectorUOffset,
+        int vectorStartOffset,
         int vtableIndex,
         int? keyInlineSize,
         TSpanComparer comparer) where TSpanComparer : ISpanComparer
     {
-        int vectorStartOffset = vectorUOffset + (int)ScalarSpanReader.ReadUInt(buffer.Slice(vectorUOffset));
         int vectorLength = (int)ScalarSpanReader.ReadUInt(buffer.Slice(vectorStartOffset));
         int index0Position = vectorStartOffset + sizeof(int);
 

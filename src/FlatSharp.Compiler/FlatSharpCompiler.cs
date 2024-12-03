@@ -560,11 +560,13 @@ public class FlatSharpCompiler
             };
 
             Stopwatch sw = Stopwatch.StartNew();
-            ISerializer<Schema.Schema> mutableSerializer = Instrument("CompileReflectionFbs", options, FlatBufferSerializer.Default.Compile<Schema.Schema>);
+            ISerializer<Schema.Schema> mutableSerializer = Instrument("CompileReflectionFbs", options,
+                FlatBufferSerializer.Default.Compile<Schema.Schema>);
 
             foreach ((byte[] s, string fbsPath) in bfbs)
             {
-                rootModel.UnionWith(ParseSchema(mutableSerializer, s, options, postProcessTransforms, mutators).ToRootModel(options, fbsPath));
+                rootModel.UnionWith(ParseSchema(mutableSerializer, s, options, postProcessTransforms, mutators)
+                    .ToRootModel(options, fbsPath));
             }
 
             ErrorContext.Current.ThrowIfHasErrors();
@@ -582,7 +584,8 @@ public class FlatSharpCompiler
                 if (step > CodeWritingPass.Initialization)
                 {
                     csharp = Instrument($"{step}.CodeWriterToString", options, writer.ToString);
-                    (assembly, _, _) = Instrument($"{step}.CompilePreviousAssembly", options, () => RoslynSerializerGenerator.CompileAssembly(csharp, true, additionalRefs));
+                    (assembly, _, _) = Instrument($"{step}.CompilePreviousAssembly", options,
+                        () => RoslynSerializerGenerator.CompileAssembly(csharp, true, additionalRefs));
                 }
 
                 writer = new CodeWriter();
@@ -648,8 +651,7 @@ public class FlatSharpCompiler
         }
 
         // Serialize
-        byte[] temp = new byte[serializer.GetMaxSize(schema)];
-        serializer.Write(temp, schema);
+        var temp = serializer.WriteToMemory(schema);
 
         // Immutable.
         return serializer.Parse(temp, FlatBufferDeserializationOption.Greedy);

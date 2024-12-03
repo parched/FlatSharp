@@ -114,7 +114,7 @@ public static class ISerializerExtensions
     /// <summary>
     /// Writes the given item to the given buffer using the default SpanWriter.
     /// </summary>
-    /// <returns>The number of bytes written.</returns>
+    /// <returns>The offset to the start of the data.</returns>
     [ExcludeFromCodeCoverage] // Just a helper
     public static int Write<T>(this ISerializer<T> serializer, byte[] buffer, T item) where T : class
     {
@@ -124,7 +124,7 @@ public static class ISerializerExtensions
     /// <summary>
     /// Writes the given item to the given buffer using the default SpanWriter.
     /// </summary>
-    /// <returns>The number of bytes written.</returns>
+    /// <returns>The offset to the start of the data.</returns>
     [ExcludeFromCodeCoverage] // Just a helper
     public static int Write(this ISerializer serializer, byte[] buffer, object item)
     {
@@ -134,7 +134,7 @@ public static class ISerializerExtensions
     /// <summary>
     /// Writes the given item to the given buffer using the default SpanWriter.
     /// </summary>
-    /// <returns>The number of bytes written.</returns>
+    /// <returns>The offset to the start of the data.</returns>
     [ExcludeFromCodeCoverage] // Just a helper
     public static int Write<T>(this ISerializer<T> serializer, ArraySegment<byte> buffer, T item) where T : class
     {
@@ -144,7 +144,7 @@ public static class ISerializerExtensions
     /// <summary>
     /// Writes the given item to the given buffer using the default SpanWriter.
     /// </summary>
-    /// <returns>The number of bytes written.</returns>
+    /// <returns>The offset to the start of the data.</returns>
     [ExcludeFromCodeCoverage] // Just a helper
     public static int Write(this ISerializer serializer, ArraySegment<byte> buffer, object item)
     {
@@ -154,7 +154,7 @@ public static class ISerializerExtensions
     /// <summary>
     /// Writes the given item to the given buffer using the default SpanWriter.
     /// </summary>
-    /// <returns>The number of bytes written.</returns>
+    /// <returns>The offset to the start of the data.</returns>
     [ExcludeFromCodeCoverage] // Just a helper
     public static int Write<T>(this ISerializer<T> serializer, Memory<byte> buffer, T item) where T : class
     {
@@ -164,7 +164,7 @@ public static class ISerializerExtensions
     /// <summary>
     /// Writes the given item to the given buffer using the default SpanWriter.
     /// </summary>
-    /// <returns>The number of bytes written.</returns>
+    /// <returns>The offset to the start of the data.</returns>
     [ExcludeFromCodeCoverage] // Just a helper
     public static int Write(this ISerializer serializer, Memory<byte> buffer, object item)
     {
@@ -174,7 +174,7 @@ public static class ISerializerExtensions
     /// <summary>
     /// Writes the given item to the given buffer using the default SpanWriter.
     /// </summary>
-    /// <returns>The number of bytes written.</returns>
+    /// <returns>The offset to the start of the data.</returns>
     [ExcludeFromCodeCoverage] // Just a helper
     public static int Write<T>(this ISerializer<T> serializer, Span<byte> buffer, T item) where T : class
     {
@@ -184,7 +184,7 @@ public static class ISerializerExtensions
     /// <summary>
     /// Writes the given item to the given buffer using the default SpanWriter.
     /// </summary>
-    /// <returns>The number of bytes written.</returns>
+    /// <returns>The offset to the start of the data.</returns>
     [ExcludeFromCodeCoverage] // Just a helper
     public static int Write(this ISerializer serializer, Span<byte> buffer, object item)
     {
@@ -194,7 +194,7 @@ public static class ISerializerExtensions
     /// <summary>
     /// Writes the given item into the given buffer writer using the default SpanWriter.
     /// </summary>
-    /// <returns>The number of bytes written.</returns>
+    /// <returns>The offset to the start of the data.</returns>
     public static int Write<T>(this ISerializer<T> serializer, IBufferWriter<byte> bufferWriter, T item) where T : class
     {
         int maxSize = serializer.GetMaxSize(item);
@@ -208,7 +208,7 @@ public static class ISerializerExtensions
     /// <summary>
     /// Writes the given item into the given buffer writer using the default SpanWriter.
     /// </summary>
-    /// <returns>The number of bytes written.</returns>
+    /// <returns>The offset to the start of the data.</returns>
     public static int Write(this ISerializer serializer, IBufferWriter<byte> bufferWriter, object item)
     {
         int maxSize = serializer.GetMaxSize(item);
@@ -228,8 +228,8 @@ public static class ISerializerExtensions
     {
         int maxSize = serializer.GetMaxSize(item);
         var buffer = new byte[maxSize];
-        int length = Write(serializer, buffer.AsSpan(), item);
-        return buffer.AsMemory(start: 0, length);
+        int offset = Write(serializer, buffer.AsSpan(), item);
+        return buffer.AsMemory(start: offset);
     }
 
     /// <summary>
@@ -241,7 +241,7 @@ public static class ISerializerExtensions
     {
         int maxSize = serializer.GetMaxSize(item);
         var buffer = new byte[maxSize];
-        int length = Write(serializer, buffer.AsSpan(), item);
-        return buffer.AsMemory(start: 0, length);
+        int offset = Write(serializer, buffer.AsSpan(), item);
+        return buffer.AsMemory(start: offset);
     }
 }

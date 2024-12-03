@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
+using System.Buffers;
 using System.Collections.Immutable;
+using System.Runtime.InteropServices;
 
 namespace FlatSharp.TypeModel;
 
@@ -117,31 +119,57 @@ public abstract class BaseVectorOfUnionTypeModel : RuntimeTypeModel
         var innerContext = context with
         {
             ValueVariableName = "current",
-            OffsetVariableName = "tuple"
         };
 
         string body = $@"
             int count = {context.ValueVariableName}.{this.LengthPropertyName};
-            int discriminatorVectorOffset = {context.SerializationContextVariableName}.{nameof(SerializationContext.AllocateVector)}(sizeof(byte), count, sizeof(byte));
-            {context.SpanWriterVariableName}.{nameof(SpanWriterExtensions.WriteUOffset)}({context.SpanVariableName}, discriminatorVectorOffset, {context.OffsetVariableName}.offset0);
-            {context.SpanWriterVariableName}.{nameof(SpanWriter.WriteInt)}({context.SpanVariableName}, count, discriminatorVectorOffset);
-            discriminatorVectorOffset += sizeof(int);
-
-            int offsetVectorOffset = {context.SerializationContextVariableName}.{nameof(SerializationContext.AllocateVector)}(sizeof(int), count, sizeof(int));
-            {context.SpanWriterVariableName}.{nameof(SpanWriterExtensions.WriteUOffset)}({context.SpanVariableName}, offsetVectorOffset, {context.OffsetVariableName}.offset1);
-            {context.SpanWriterVariableName}.{nameof(SpanWriter.WriteInt)}({context.SpanVariableName}, count, offsetVectorOffset);
-            offsetVectorOffset += sizeof(int);
-
+            byte[]? discriminatorPooledArray = null;
+            Span<byte> tempDiscriminatorSpan = count < 1024 ? stackalloc byte[count] : (discriminatorPooledArray = {
+                typeof(ArrayPool<byte>).GetGlobalCompilableTypeName()
+            }.Shared.Rent(count)).AsSpan();
+            int[]? offsetPooledArray = null;
+            Span<int> tempOffsetSpan = count < 1024 ? stackalloc int[count] : (offsetPooledArray = {
+                typeof(ArrayPool<int>).GetGlobalCompilableTypeName()
+            }.Shared.Rent(count)).AsSpan();
             for (int i = 0; i < count; ++i)
             {{
                 var current = {context.ValueVariableName}{this.Indexer("i")};
 
-                var tuple = (discriminatorVectorOffset, offsetVectorOffset);
-                {innerContext.GetSerializeInvocation(itemTypeModel.ClrType)};
+                var (discriminator, offset) = {innerContext.GetSerializeInvocation(itemTypeModel.ClrType)};
+                tempDiscriminatorSpan[i] = discriminator;
+                tempOffsetSpan[i] = offset;
+            }}
 
-                discriminatorVectorOffset++;
-                offsetVectorOffset += sizeof(int);
-            }}";
+            int offsetVectorStartOffset = {context.SerializationContextVariableName}.{nameof(SerializationContext.AllocateVector)}(sizeof(int), count, sizeof(int));
+            int offsetVectorDataStartOffset = offsetVectorStartOffset + sizeof(int);
+            for (int i = 0; i < count; ++i)
+            {{
+                int vectorOffset = offsetVectorDataStartOffset + (i * sizeof(int));
+                {context.SpanWriterVariableName}.{nameof(SpanWriterExtensions.WriteUOffset)}({context.SpanVariableName}, tempOffsetSpan[i], vectorOffset);
+            }}
+            {context.SpanWriterVariableName}.{nameof(SpanWriter.WriteInt)}({context.SpanVariableName}, count, offsetVectorStartOffset);
+
+            int discriminatorVectorStartOffset = {context.SerializationContextVariableName}.{nameof(SerializationContext.AllocateVector)}(sizeof(byte), count, sizeof(byte));
+            int discriminatorVectorDataStartOffset = discriminatorVectorStartOffset + sizeof(int);
+            for (int i = 0; i < count; ++i)
+            {{
+                int vectorOffset = discriminatorVectorDataStartOffset + (i * sizeof(byte));
+                {context.SpanWriterVariableName}.{nameof(SpanWriter.WriteByte)}({context.SpanVariableName}, tempDiscriminatorSpan[i], vectorOffset);
+            }}
+            {context.SpanWriterVariableName}.{nameof(SpanWriter.WriteInt)}({context.SpanVariableName}, count, discriminatorVectorStartOffset);
+
+            if (discriminatorPooledArray is not null)
+            {{
+                {typeof(ArrayPool<byte>).GetGlobalCompilableTypeName()}.Shared.Return(discriminatorPooledArray);
+            }}
+
+            if (offsetPooledArray is not null)
+            {{
+                {typeof(ArrayPool<int>).GetGlobalCompilableTypeName()}.Shared.Return(offsetPooledArray);
+            }}
+            
+            return (discriminatorVectorStartOffset, offsetVectorStartOffset);
+        ";
 
         return new CodeGeneratedMethod(body);
     }

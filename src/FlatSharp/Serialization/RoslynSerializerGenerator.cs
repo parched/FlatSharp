@@ -411,28 +411,33 @@ $@"
         {
             var parts = DefaultMethodNameResolver.ResolveSerialize(typeModel);
 
-            // Reserve first 4 bytes for offset to first table.
-            string writeFileId = $"context.Offset = 4;";
+            string writeFileId = "";
 
-            // Or if there is a file ID, reserve the first 8 bytes.
             if (typeModel.TryGetFileIdentifier(out string? fileId))
             {
+                // The alignment is matched to the root offset so there's no gap between them.
                 writeFileId = $"""
-                    context.Offset = 8;
-                    target[7] = {(byte)fileId[3]};
-                    target[6] = {(byte)fileId[2]};
-                    target[5] = {(byte)fileId[1]};
-                    target[4] = {(byte)fileId[0]};
+                    int fileIdStart = context.{nameof(SerializationContext.AllocateSpace)}(4, 4);
+                    target[fileIdStart + 3] = {(byte)fileId[3]};
+                    target[fileIdStart + 2] = {(byte)fileId[2]};
+                    target[fileIdStart + 1] = {(byte)fileId[1]};
+                    target[fileIdStart + 0] = {(byte)fileId[0]};
                 """;
             }
+
+            // We need to align the start of the buffer
+            // so that when it is trimmed, everything is still aligned.
+            int maximumAlignment = 8; // Is this safe assumption?
 
             string methodText =
 $@"
                 public void Write<TSpanWriter>(TSpanWriter writer, Span<byte> target, {CSharpHelpers.GetGlobalCompilableTypeName(rootType)} root, SerializationContext context)
                     where TSpanWriter : ISpanWriter
                 {{
+                    var offset = {parts.@namespace}.{parts.className}.{parts.methodName}(writer, target, root, context);
                     {writeFileId}
-                    {parts.@namespace}.{parts.className}.{parts.methodName}(writer, target, root, 0, context);
+                    int start = context.{nameof(SerializationContext.AllocateSpace)}(4, {maximumAlignment});
+                    writer.{nameof(SpanWriterExtensions.WriteUOffset)}(target, offset, start);
                 }}
 ";
             bodyParts.Add(methodText);
@@ -593,7 +598,7 @@ $@"
             : string.Empty;
 
         var maxSizeContext = new GetMaxSizeCodeGenContext("value", getMaxSizeFieldContextVariableName, this.options, this.typeModelContainer, allContextsMap);
-        var serializeContext = new SerializationCodeGenContext("context", "span", "spanWriter", "value", "offset", serializeFieldContextVariableName, isOffsetByRef, this.typeModelContainer, this.options, allContextsMap);
+        var serializeContext = new SerializationCodeGenContext("context", "span", "spanWriter", "value", "offset", serializeFieldContextVariableName, this.typeModelContainer, this.options, allContextsMap);
         var parseContext = new ParserCodeGenContext("buffer", "offset", "remainingDepth", "TInputBuffer", isOffsetByRef, parseFieldContextVariableName, options, this.typeModelContainer, allContextsMap);
 
         CodeGeneratedMethod maxSizeMethod = typeModel.CreateGetMaxSizeMethodBody(maxSizeContext);
@@ -767,14 +772,40 @@ $@"
             tableFieldContextParameter = $", {nameof(TableFieldContext)} {context.TableFieldContextVariableName}";
         }
 
+        string returnType;
+        string offsetParameter;
+        
+        if (typeModel.SerializesInline)
+        {
+            returnType = "void";
+            
+            offsetParameter = $", int {context.OffsetVariableName}";
+        }
+        else
+        {
+            static string GetReturnType(PhysicalLayoutElement pl)
+            {
+                return pl.InlineSize switch
+                {
+                    1 => "byte", // union discriminator
+                    4 => "int", // buffer offset
+                    _ => throw new NotImplementedException("invalid inline size")
+                };
+            }
+            var types = typeModel.PhysicalLayout.Select(GetReturnType).ToList();
+            returnType = types.Count == 1 ? types[0] : $"({string.Join(", ", types)})";
+
+            offsetParameter = string.Empty;
+        }
+        
         string fullText =
         $@"
             {method.GetMethodImplAttribute()}
-            internal static void {DefaultMethodNameResolver.ResolveSerialize(typeModel).methodName}<TSpanWriter>(
+            internal static {returnType} {DefaultMethodNameResolver.ResolveSerialize(typeModel).methodName}<TSpanWriter>(
                 TSpanWriter {context.SpanWriterVariableName}, 
                 Span<byte> {context.SpanVariableName}, 
-                {CSharpHelpers.GetGlobalCompilableTypeName(typeModel.ClrType)} {context.ValueVariableName}, 
-                {GetVTableOffsetVariableType(typeModel.PhysicalLayout.Length)} {context.OffsetVariableName}
+                {CSharpHelpers.GetGlobalCompilableTypeName(typeModel.ClrType)} {context.ValueVariableName}
+                {offsetParameter}
                 {serializationContextParameter}
                 {tableFieldContextParameter}) where TSpanWriter : ISpanWriter
             {{
