@@ -139,7 +139,7 @@ public class SharedStringWriter : ISharedStringWriter
         int count = offsets.Count;
         for (int i = 0; i < count; ++i)
         {
-            spanWriter.WriteUOffset(span, offsets[i], stringOffset);
+            spanWriter.WriteUOffset(span, offsetToWrite: stringOffset, offset: offsets[i]);
         }
 
         offsets.Clear();
