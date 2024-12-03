@@ -111,9 +111,4 @@ public struct SpanWriter : ISpanWriter
 
         return bytesWritten;
     }
-
-    public void FlushSharedStrings(ISharedStringWriter writer, Span<byte> destination, SerializationContext context)
-    {
-        writer.FlushWrites(this, destination, context);
-    }
 }

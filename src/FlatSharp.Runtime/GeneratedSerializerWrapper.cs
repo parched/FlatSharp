@@ -189,12 +189,6 @@ internal class GeneratedSerializerWrapper<T> : ISerializer<T>, ISerializer where
 
             this.innerSerializer.Write(writer, destination, item, serializationContext);
 
-            if (sharedStringWriter?.IsDirty == true)
-            {
-                writer.FlushSharedStrings(sharedStringWriter, destination, serializationContext);
-                Debug.Assert(!sharedStringWriter.IsDirty);
-            }
-
             serializationContext.InvokePostSerializeActions(destination);
         }
         catch (BufferTooSmallException ex)

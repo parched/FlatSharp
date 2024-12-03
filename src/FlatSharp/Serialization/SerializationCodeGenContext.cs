@@ -31,7 +31,6 @@ public record SerializationCodeGenContext
         string valueVariableName,
         string offsetVariableName,
         string tableFieldContextVariableName,
-        bool isOffsetByRef,
         TypeModelContainer typeModelContainer,
         FlatBufferSerializerOptions options,
         IReadOnlyDictionary<ITypeModel, HashSet<TableFieldContext>> allFieldContexts)
@@ -42,7 +41,6 @@ public record SerializationCodeGenContext
         this.ValueVariableName = valueVariableName;
         this.OffsetVariableName = offsetVariableName;
         this.TypeModelContainer = typeModelContainer;
-        this.IsOffsetByRef = isOffsetByRef;
         this.Options = options;
         this.TableFieldContextVariableName = tableFieldContextVariableName;
         this.AllFieldContexts = allFieldContexts;
@@ -79,11 +77,6 @@ public record SerializationCodeGenContext
     public string OffsetVariableName { get; init; }
 
     /// <summary>
-    /// Indicates if the offset is passed by reference.
-    /// </summary>
-    public bool IsOffsetByRef { get; init; }
-
-    /// <summary>
     /// Resolves Type -> TypeModel.
     /// </summary>
     public TypeModelContainer TypeModelContainer { get; private init; }
@@ -104,16 +97,16 @@ public record SerializationCodeGenContext
     public string GetSerializeInvocation(Type type)
     {
         ITypeModel typeModel = this.TypeModelContainer.CreateTypeModel(type);
-        string byRef = string.Empty;
-        if (this.IsOffsetByRef)
-        {
-            byRef = "ref ";
-        }
 
         StringBuilder sb = new StringBuilder();
 
         var methodParts = DefaultMethodNameResolver.ResolveSerialize(typeModel);
-        sb.Append($"{methodParts.@namespace}.{methodParts.className}.{methodParts.methodName}({this.SpanWriterVariableName}, {this.SpanVariableName}, {this.ValueVariableName}, {byRef}{this.OffsetVariableName}");
+        sb.Append($"{methodParts.@namespace}.{methodParts.className}.{methodParts.methodName}({this.SpanWriterVariableName}, {this.SpanVariableName}, {this.ValueVariableName}");
+        
+        if (typeModel.SerializesInline)
+        {
+            sb.Append($", {this.OffsetVariableName}");
+        }
 
         if (typeModel.SerializeMethodRequiresContext)
         {

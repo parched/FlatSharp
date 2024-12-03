@@ -113,20 +113,17 @@ public class StringTypeModel : RuntimeTypeModel
                     var sharedStringWriter = {context.SerializationContextVariableName}.{nameof(SerializationContext.SharedStringWriter)};
                     if (!(sharedStringWriter is null))
                     {{
-                        sharedStringWriter.{nameof(ISharedStringWriter.WriteSharedString)}(
+                        return sharedStringWriter.{nameof(ISharedStringWriter.WriteSharedString)}(
                             {context.SpanWriterVariableName}, 
                             {context.SpanVariableName},
-                            {context.OffsetVariableName},
                             {context.ValueVariableName},
                             {context.SerializationContextVariableName});
-                        return;
                     }}
                 }}
                 
-                {context.SpanWriterVariableName}.{nameof(SpanWriterExtensions.WriteString)}(
+                return {context.SpanWriterVariableName}.{nameof(SpanWriterExtensions.WriteAndProvisionString)}(
                     {context.SpanVariableName},
                     {context.ValueVariableName},
-                    {context.OffsetVariableName},
                     {context.SerializationContextVariableName});
             ";
         }
@@ -134,10 +131,9 @@ public class StringTypeModel : RuntimeTypeModel
         {
             // otherwise, we can omit that code entirely.
             body = $@"
-                {context.SpanWriterVariableName}.{nameof(SpanWriterExtensions.WriteString)}(
+                return {context.SpanWriterVariableName}.{nameof(SpanWriterExtensions.WriteAndProvisionString)}(
                     {context.SpanVariableName},
                     {context.ValueVariableName},
-                    {context.OffsetVariableName},
                     {context.SerializationContextVariableName});
             ";
         }

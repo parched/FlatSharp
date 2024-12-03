@@ -15,6 +15,7 @@
  */
 
 using System.Collections.Immutable;
+using System.Runtime.InteropServices;
 
 namespace FlatSharp.TypeModel;
 
@@ -120,28 +121,42 @@ public abstract class BaseVectorOfUnionTypeModel : RuntimeTypeModel
             OffsetVariableName = "tuple"
         };
 
+        // We assume there's enough space at the start of the buffer, if there isn't,
+        // it will be caught later, when the final vector is allocated.
+        // We do the final copy backwards in case the source and destination overlap.
         string body = $@"
             int count = {context.ValueVariableName}.{this.LengthPropertyName};
-            int discriminatorVectorOffset = {context.SerializationContextVariableName}.{nameof(SerializationContext.AllocateVector)}(sizeof(byte), count, sizeof(byte));
-            {context.SpanWriterVariableName}.{nameof(SpanWriterExtensions.WriteUOffset)}({context.SpanVariableName}, discriminatorVectorOffset, {context.OffsetVariableName}.offset0);
-            {context.SpanWriterVariableName}.{nameof(SpanWriter.WriteInt)}({context.SpanVariableName}, count, discriminatorVectorOffset);
-            discriminatorVectorOffset += sizeof(int);
-
-            int offsetVectorOffset = {context.SerializationContextVariableName}.{nameof(SerializationContext.AllocateVector)}(sizeof(int), count, sizeof(int));
-            {context.SpanWriterVariableName}.{nameof(SpanWriterExtensions.WriteUOffset)}({context.SpanVariableName}, offsetVectorOffset, {context.OffsetVariableName}.offset1);
-            {context.SpanWriterVariableName}.{nameof(SpanWriter.WriteInt)}({context.SpanVariableName}, count, offsetVectorOffset);
-            offsetVectorOffset += sizeof(int);
-
+            Span<byte> tempDiscriminatorSpan = {context.SpanVariableName};
+            Span<int> tempOffsetSpan = {typeof(MemoryMarshal).GetGlobalCompilableTypeName()}.Cast<byte, int>({context.SpanVariableName}.Slice(count);
             for (int i = 0; i < count; ++i)
             {{
                 var current = {context.ValueVariableName}{this.Indexer("i")};
 
-                var tuple = (discriminatorVectorOffset, offsetVectorOffset);
-                {innerContext.GetSerializeInvocation(itemTypeModel.ClrType)};
+                var (discriminator, offset) = {innerContext.GetSerializeInvocation(itemTypeModel.ClrType)};
+                tempDiscriminatorSpan[i] = discriminator;
+                tempOffsetSpan[i] = offset;
+            }}
 
-                discriminatorVectorOffset++;
-                offsetVectorOffset += sizeof(int);
-            }}";
+            int offsetVectorStartOffset = {context.SerializationContextVariableName}.{nameof(SerializationContext.AllocateVector)}(sizeof(int), count, sizeof(int));
+            {context.SpanWriterVariableName}.{nameof(SpanWriter.WriteInt)}({context.SpanVariableName}, count, offsetVectorStartOffset);
+            int offsetVectorDataStartOffset = offsetVectorStartOffset + sizeof(int);
+            for (int i = count - 1; i >= 0; --i)
+            {{
+                int vectorOffset = offsetVectorDataStartOffset + (i * sizeof(int));
+                {context.SpanWriterVariableName}.{nameof(SpanWriterExtensions.WriteUOffset)}({context.SpanVariableName}, tempOffsetSpan[i], vectorOffset);
+            }}
+
+            int discriminatorVectorStartOffset = {context.SerializationContextVariableName}.{nameof(SerializationContext.AllocateVector)}(sizeof(byte), count, sizeof(byte));
+            {context.SpanWriterVariableName}.{nameof(SpanWriter.WriteInt)}({context.SpanVariableName}, count, discriminatorVectorStartOffset);
+            int discriminatorVectorDataStartOffset = discriminatorVectorStartOffset + sizeof(int);
+            for (int i = count - 1; i >= 0; --i)
+            {{
+                int vectorOffset = discriminatorVectorDataStartOffset + (i * sizeof(byte));
+                {context.SpanWriterVariableName}.{nameof(SpanWriter.WriteByte)}({context.SpanVariableName}, tempDiscriminatorSpan[i], vectorOffset);
+            }}
+            
+            return (discriminatorVectorStartOffset, offsetVectorStartOffset);
+        ";
 
         return new CodeGeneratedMethod(body);
     }

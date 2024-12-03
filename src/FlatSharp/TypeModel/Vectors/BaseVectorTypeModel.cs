@@ -16,6 +16,7 @@
 
 using System.Collections.Immutable;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace FlatSharp.TypeModel;
 
@@ -139,19 +140,56 @@ public abstract class BaseVectorTypeModel : RuntimeTypeModel
             OffsetVariableName = "vectorOffset"
         };
 
-        string loopBody = $@"
-            {this.GetThrowIfNullStatement("current")}
-            {innerLoopContext.GetSerializeInvocation(itemTypeModel.ClrType)};
-            vectorOffset += {this.PaddedMemberInlineSize};";
 
-        string body = $@"
-            int count = {context.ValueVariableName}.{this.LengthPropertyName};
-            int vectorOffset = {context.SerializationContextVariableName}.{nameof(SerializationContext.AllocateVector)}({itemTypeModel.PhysicalLayout[0].Alignment}, count, {this.PaddedMemberInlineSize});
-            {context.SpanWriterVariableName}.{nameof(SpanWriterExtensions.WriteUOffset)}({context.SpanVariableName}, vectorOffset, {context.OffsetVariableName});
-            {context.SpanWriterVariableName}.{nameof(SpanWriter.WriteInt)}({context.SpanVariableName}, count, vectorOffset);
-            vectorOffset += sizeof(int);
+        string body;
+        if (itemTypeModel.SerializesInline)
+        {
+            string loopBody = $@"
+                {this.GetThrowIfNullStatement("current")}
+                {innerLoopContext.GetSerializeInvocation(itemTypeModel.ClrType)};
+                vectorOffset += {this.PaddedMemberInlineSize};";
 
-            {this.CreateLoop(context.Options, context.ValueVariableName, "count", "current", loopBody)}";
+            body = $@"
+                int count = {context.ValueVariableName}.{this.LengthPropertyName};
+                int vectorStartOffset = {context.SerializationContextVariableName}.{nameof(SerializationContext.AllocateVector)}({itemTypeModel.PhysicalLayout[0].Alignment}, count, {this.PaddedMemberInlineSize});
+                int vectorOffset = vectorStartOffset;
+                {context.SpanWriterVariableName}.{nameof(SpanWriter.WriteInt)}({context.SpanVariableName}, count, vectorOffset);
+                vectorOffset += sizeof(int);
+
+                {this.CreateLoop(context.Options, context.ValueVariableName, "count", "current", loopBody)}
+
+                return vectorStartOffset;";
+        }
+        else
+        {
+            string loopBody = $@"
+                {this.GetThrowIfNullStatement("current")}
+                int itemOffset = {innerLoopContext.GetSerializeInvocation(itemTypeModel.ClrType)};
+                tempSpan[tempIndex] = itemOffset;
+                tempIndex++;";
+
+            // We assume there's enough space at the start of the buffer, if there isn't,
+            // it will be caught later, when the final vector is allocated.
+            // We do the final copy backwards in case the source and destination overlap.
+            body = $@"
+                Span<int> tempSpan = {typeof(MemoryMarshal).GetGlobalCompilableTypeName()}.Cast<byte, int>({context.SpanVariableName});
+                int tempIndex = 0;
+                int count = {context.ValueVariableName}.{this.LengthPropertyName};
+
+                {this.CreateLoop(context.Options, context.ValueVariableName, "count", "current", loopBody)}
+
+                int vectorStartOffset = {context.SerializationContextVariableName}.{nameof(SerializationContext.AllocateVector)}({itemTypeModel.PhysicalLayout[0].Alignment}, count, {this.PaddedMemberInlineSize});
+                {context.SpanWriterVariableName}.{nameof(SpanWriter.WriteInt)}({context.SpanVariableName}, count, vectorStartOffset);
+                int vectorDataStartOffset = vectorStartOffset + {sizeof(int)};
+                for (int i = count - 1; i >= 0; i--)
+                {{
+                    int vectorOffset = vectorStartOffset + (i * {sizeof(int)});
+                    {context.SpanWriterVariableName}.{nameof(SpanWriterExtensions.WriteUOffset)}({context.SpanVariableName}, tempSpan[i], vectorOffset);
+                    vectorDataStartOffset += sizeof(int);
+                }}
+
+                return vectorStartOffset;";
+        }
 
         return new CodeGeneratedMethod(body);
     }

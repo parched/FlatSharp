@@ -56,15 +56,7 @@ public class SharedStringWriter : ISharedStringWriter
         var cache = this.sharedStringOffsetCache;
         for (int i = 0; i < cache.Length; ++i)
         {
-            ref WriteCacheEntry entry = ref cache[i];
-            entry.String = null;
-
-            if (entry.Offsets == null)
-            {
-                entry.Offsets = new List<int>();
-            }
-
-            entry.Offsets.Clear();
+            cache[i] = default;
         }
 
         this.IsDirty = false;
@@ -73,10 +65,9 @@ public class SharedStringWriter : ISharedStringWriter
     /// <summary>
     /// Writes a shared string.
     /// </summary>
-    public void WriteSharedString<TSpanWriter>(
+    public int WriteSharedString<TSpanWriter>(
         TSpanWriter spanWriter,
         Span<byte> data,
-        int offset,
         string value,
         SerializationContext context) where TSpanWriter : ISpanWriter
     {
@@ -87,62 +78,17 @@ public class SharedStringWriter : ISharedStringWriter
 
         if (value.Equals(line.String))
         {
-            line.Offsets.Add(offset);
-            return;
+            return line.Offset;
         }
 
-        var offsets = line.Offsets;
-        string? sharedString = line.String;
-        if (sharedString is not null)
-        {
-            FlushSharedString(spanWriter, data, sharedString, offsets, context);
-        }
+        int stringOffset = spanWriter.WriteAndProvisionString(data, value, context);
 
         line.String = value;
-        offsets.Add(offset);
-
+        line.Offset = stringOffset;
+        
         this.IsDirty = true;
-    }
 
-    /// <summary>
-    /// Flush any pending writes.
-    /// </summary>
-    public void FlushWrites<TSpanWriter>(TSpanWriter writer, Span<byte> data, SerializationContext context) where TSpanWriter : ISpanWriter
-    {
-        var cache = this.sharedStringOffsetCache;
-        for (int i = 0; i < cache.Length; ++i)
-        {
-            ref WriteCacheEntry item = ref cache[i];
-            var str = item.String;
-
-            if (str is not null)
-            {
-                FlushSharedString(writer, data, str, item.Offsets, context);
-                item.String = null;
-            }
-
-            item.Offsets.Clear();
-        }
-
-        this.IsDirty = false;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void FlushSharedString<TSpanWriter>(
-        TSpanWriter spanWriter,
-        Span<byte> span,
-        string value,
-        List<int> offsets,
-        SerializationContext context) where TSpanWriter : ISpanWriter
-    {
-        int stringOffset = spanWriter.WriteAndProvisionString(span, value, context);
-        int count = offsets.Count;
-        for (int i = 0; i < count; ++i)
-        {
-            spanWriter.WriteUOffset(span, offsetToWrite: stringOffset, offset: offsets[i]);
-        }
-
-        offsets.Clear();
+        return stringOffset;
     }
 
     // Cache entry. Stored as struct to increase data locality in the array.
@@ -151,6 +97,6 @@ public class SharedStringWriter : ISharedStringWriter
         // The string
         public string? String;
 
-        public List<int> Offsets;
+        public int Offset;
     }
 }

@@ -380,6 +380,7 @@ public class TableTypeModel : RuntimeTypeModel
         List<string> getters = new();
         List<string> prepareBlocks = new();
         List<string> writeBlocks = new();
+        List<string> writeInlineBlocks = new();
 
         List<(
             int vtableIndex,
@@ -457,24 +458,36 @@ public class TableTypeModel : RuntimeTypeModel
                 t.model,
                 context));
 
-            if (t.modelIndex == 0 && !t.model.ItemTypeModel.SerializesInline)
+            string serializeBlock;
+            if (t.model.ItemTypeModel.SerializesInline)
             {
-                writeBlocks.Add($@"
-                    if ({OffsetVariableName(t.vtableIndex, 0)} != tableStart)
-                    {{
-                        {this.GetSerializeCoreBlock(t.vtableIndex, t.modelIndex, t.valueVariableName, t.layout, t.model, context)}
-                    }}
-                ");
+                serializeBlock = this.GetSerializeCoreBlock(t.vtableIndex, t.modelIndex, t.valueVariableName, t.layout, t.model, context);
             }
+            else
+            {
+                string writeMethodName = t.model.ItemTypeModel.PhysicalLayout[t.modelIndex].InlineSize switch
+                {
+                    1 => nameof(ISpanWriter.WriteByte), // discriminator
+                    4 => nameof(SpanWriterExtensions.WriteUOffset), // offset
+                    _ => throw new InvalidOperationException("Invalid inline size."),
+                };
+                serializeBlock = $@"
+                {context.SpanWriterVariableName}.{writeMethodName}({context.SpanVariableName}, {DataVariableName(t.vtableIndex, t.modelIndex)}, tableStart + {OffsetVariableName(t.vtableIndex, t.modelIndex)});
+                ";
+            }
+            writeBlocks.Add($@"
+                if ({OffsetVariableName(t.vtableIndex, 0)} != 0)
+                {{
+                    {serializeBlock}
+                }}
+            ");
         }
 
-        // Start by asking for the worst-case number of bytes from the serializationcontext.
+        var maxItemAlignment = items.Max(x => x.layout.Alignment);
+        var tableAlignment = Math.Max(maxItemAlignment, sizeof(int)); // vtable soffset_t alignment.
         string methodStart =
 $@"
-            int tableStart = {context.SerializationContextVariableName}.{nameof(SerializationContext.AllocateSpace)}({maxInlineSize}, sizeof(int));
-            {context.SpanWriterVariableName}.{nameof(SpanWriterExtensions.WriteUOffset)}({context.SpanVariableName}, tableStart, {context.OffsetVariableName});
-            int currentOffset = tableStart + sizeof(int); // skip past vtable soffset_t.
-
+            int currentOffset = {sizeof(int)}; // skip past vtable soffset_t.
             int vtableLength = {minVtableLength};
             Span<byte> vtable = stackalloc byte[{4 + 2 * (maxIndex + 1)}];
 ";
@@ -493,25 +506,31 @@ $@"
         body.AddRange(getters);
         body.AddRange(prepareBlocks);
 
-        // We probably over-allocated. Figure out by how much and back up the cursor.
-        // Then we can write the vtable.
-        body.Add("int tableLength = currentOffset - tableStart;");
-        body.Add($"{context.SerializationContextVariableName}.{nameof(SerializationContext.Offset)} -= {maxInlineSize} - tableLength;");
-
+        body.Add("int tableLength = currentOffset;");
+        
         // Finish vtable.
+        // The vtable is written at a greater offset than the table,
+        // but it could be swapped, some performance testing would be needed to determine if that is beneficial.
         body.Add($"{context.SpanWriterVariableName}.{nameof(ISpanWriter.WriteUShort)}(vtable, (ushort)vtableLength, 0);");
         body.Add($"{context.SpanWriterVariableName}.{nameof(ISpanWriter.WriteUShort)}(vtable, (ushort)tableLength, sizeof(ushort));");
-
         body.Add($"int vtablePosition = {context.SerializationContextVariableName}.{nameof(SerializationContext.FinishVTable)}({context.SpanVariableName}, vtable.Slice(0, vtableLength));");
+
+        body.Add(
+            $"int tableStart = {context.SerializationContextVariableName}.{nameof(SerializationContext.AllocateSpace)}(tableLength, {tableAlignment});");
+
         body.Add($"{context.SpanWriterVariableName}.{nameof(SpanWriter.WriteInt)}({context.SpanVariableName}, tableStart - vtablePosition, tableStart);");
 
         body.AddRange(writeBlocks);
-
+        
+        body.Add($"return tableStart;");
+        
         // These methods are often enormous, and inlining can have a detrimental effect on perf.
         return new CodeGeneratedMethod(string.Join("\r\n", body));
     }
 
     private static string OffsetVariableName(int index, int i) => $"index{index + i}Offset";
+    
+    private static string DataVariableName(int index, int i) => $"index{index + i}Data";
 
     private string GetPrepareSerializeBlock(
         int minVTableLength,
@@ -553,7 +572,7 @@ $@"
             currentOffset += {nameof(SerializationHelpers)}.{nameof(SerializationHelpers.GetAlignmentError)}(currentOffset, {layout.Alignment});
             {OffsetVariableName(index, i)} = currentOffset;
             currentOffset += {layout.InlineSize};";
-
+        
         string setVtableBlock = string.Empty;
         if (i == memberModel.ItemTypeModel.PhysicalLayout.Length - 1)
         {
@@ -577,21 +596,44 @@ $@"
         }
 
         string writeVTableBlock =
-            $"{context.SpanWriterVariableName}.{nameof(ISpanWriter.WriteUShort)}(vtable, (ushort)({OffsetVariableName(index, i)} - tableStart), {vTableIndex});";
-
-        string inlineSerialize = string.Empty;
-        if (memberModel.ItemTypeModel.SerializesInline)
+            $"{context.SpanWriterVariableName}.{nameof(ISpanWriter.WriteUShort)}(vtable, (ushort)({OffsetVariableName(index, i)}), {vTableIndex});";
+        
+        string nonInlineSerialize = string.Empty;
+        string serializationResultAssignment = string.Empty;
+        string inlineVariableDeclaration = string.Empty;
+        if (i == 0 && !memberModel.ItemTypeModel.SerializesInline)
         {
-            inlineSerialize = this.GetSerializeCoreBlock(
-                index, i, valueVariableName, layout, memberModel, context);
+            for (int j = 0; j < memberModel.ItemTypeModel.PhysicalLayout.Length; ++j)
+            {
+                var physicalLayout = memberModel.ItemTypeModel.PhysicalLayout[j];
+                string type = physicalLayout.InlineSize switch
+                {
+                    1 => "byte",
+                    4 => "int",
+                    _ => throw new InvalidOperationException("Invalid inline size."),
+                };
+                inlineVariableDeclaration += $@"{type} {DataVariableName(index, j)} = default;";
+            }
+
+            if (memberModel.ItemTypeModel.PhysicalLayout.Length == 1)
+            {
+                serializationResultAssignment = $"{DataVariableName(index, 0)} = ";
+            }
+            else
+            {
+                serializationResultAssignment = $"({string.Join(", ", Enumerable.Range(0, memberModel.ItemTypeModel.PhysicalLayout.Length).Select(x => DataVariableName(index, x)))}) = ";
+            }
+            nonInlineSerialize = this.GetSerializeCoreBlock(index, i, valueVariableName, layout, memberModel, context);
         }
 
+
         return $@"
-            var {OffsetVariableName(index, i)} = tableStart;
+            var {OffsetVariableName(index, i)} = 0;
+            {inlineVariableDeclaration}
             {condition} 
             {{
                 {prepareBlock}
-                {inlineSerialize}
+                {serializationResultAssignment}{nonInlineSerialize}
                 {setVtableBlock}
             }}
             {elseBlock}
@@ -633,32 +675,14 @@ $@"
             nullForgiving = "!";
         }
 
-        string serializeInvocation;
-        string offsetTuple = string.Empty;
-        if (vtableEntries == 1)
+        string serializeInvocation = (context with
         {
-            serializeInvocation = (context with
-            {
-                ValueVariableName = $"{valueVariableName}{nullForgiving}",
-                OffsetVariableName = $"{OffsetVariableName(index, 0)}",
-                TableFieldContextVariableName = $"{this.MetadataClassName}.{memberModel.PropertyInfo.Name}",
-            }).GetSerializeInvocation(memberModel.ItemTypeModel.ClrType);
-        }
-        else
-        {
-            serializeInvocation = (context with
-            {
-                ValueVariableName = $"{valueVariableName}{nullForgiving}",
-                OffsetVariableName = $"offsetTuple",
-                IsOffsetByRef = true,
-                TableFieldContextVariableName = $"{this.MetadataClassName}.{memberModel.PropertyInfo.Name}",
-            }).GetSerializeInvocation(memberModel.ItemTypeModel.ClrType);
-
-            offsetTuple = $"var offsetTuple = ({string.Join(", ", Enumerable.Range(0, vtableEntries).Select(x => OffsetVariableName(index, x)))});";
-        }
+            ValueVariableName = $"{valueVariableName}{nullForgiving}",
+            OffsetVariableName = $"tableStart + {OffsetVariableName(index, 0)}",
+            TableFieldContextVariableName = $"{this.MetadataClassName}.{memberModel.PropertyInfo.Name}",
+        }).GetSerializeInvocation(memberModel.ItemTypeModel.ClrType);
 
         return $@"
-            {offsetTuple}
             {serializeInvocation};
             {sortInvocation}";
     }

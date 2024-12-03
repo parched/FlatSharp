@@ -130,7 +130,6 @@ public record ParserCodeGenContext
             valueVariableName,
             offsetVariableName,
             this.TableFieldContextVariableName,
-            this.IsOffsetByRef,
             this.TypeModelContainer,
             this.Options,
             this.AllFieldContexts);

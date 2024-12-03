@@ -77,12 +77,4 @@ public interface ISpanWriter
     /// Writes the bytes of the given string to the destination span according to the given encoding.
     /// </summary>
     int GetStringBytes(Span<byte> destination, string value, Encoding encoding);
-
-    /// <summary>
-    /// Invokes the <see cref="ISharedStringWriter.FlushWrites{TSpanWriter}(TSpanWriter, Span{byte}, SerializationContext)"/> method.
-    /// </summary>
-    void FlushSharedStrings(
-        ISharedStringWriter writer,
-        Span<byte> destination,
-        SerializationContext context);
 }

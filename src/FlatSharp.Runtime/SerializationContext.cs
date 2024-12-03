@@ -65,7 +65,7 @@ public sealed class SerializationContext
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Reset(int capacity)
     {
-        this.offset = 0;
+        this.offset = capacity;
         this.capacity = capacity;
         this.SharedStringWriter = null;
         this.postSerializeActions.Clear();
@@ -103,24 +103,12 @@ public sealed class SerializationContext
             FSThrow.ArgumentOutOfRange(nameof(numberOfItems));
         }
 
-        int bytesNeeded = checked(numberOfItems * sizePerItem + sizeof(uint));
+        int bytesNeededForItems = checked(numberOfItems * sizePerItem);
 
-        // Vectors have a size uoffset_t, followed by N items. The uoffset_t needs to be 4 byte aligned, while the items need to be N byte aligned.
-        // So, if the items are double or long, the length field has 4 byte alignment, but the item field has 8 byte alignment.
-        // This means that we need to choose an offset such that:
-        // (lengthIndex) % 4 == 0
-        // (lengthIndex + 4) % N == 0
-        //
-        // Obviously, if N <= 4 this is trivial. If N = 8, it gets a bit more interesting.
-        // First, align the offset to 4.
-        int offset = this.offset;
-        offset += SerializationHelpers.GetAlignmentError(offset, sizeof(uint));
-
-        // Now, align offset + 4 to item alignment.
-        offset += SerializationHelpers.GetAlignmentError(offset + sizeof(uint), itemAlignment);
-        this.offset = offset;
-
-        offset = this.AllocateSpace(bytesNeeded, alignment: 1); // already aligned correctly, no need to realign
+        // Vectors have a size uoffset_t, followed by N items.
+        // The uoffset_t needs to be 4 byte aligned, while the items need to be N byte aligned.
+        this.AllocateSpace(bytesNeededForItems, alignment: itemAlignment);
+        int offset = this.AllocateSpace(sizeof(uint), sizeof(uint));
 
         Debug.Assert(offset % 4 == 0);
         Debug.Assert((offset + 4) % itemAlignment == 0);
@@ -133,19 +121,18 @@ public sealed class SerializationContext
     /// </summary>
     public int AllocateSpace(int bytesNeeded, int alignment)
     {
+        Debug.Assert((alignment & (alignment - 1)) == 0, "Alignment must be a power of 2.");
+
         int offset = this.offset;
-        Debug.Assert(alignment == 1 || alignment % 2 == 0);
-
-        offset += SerializationHelpers.GetAlignmentError(offset, alignment);
-
-        int finalOffset = offset + bytesNeeded;
-        if (finalOffset >= this.capacity)
+        if (offset < bytesNeeded)
         {
             FSThrow.BufferTooSmall(0);
         }
 
-        this.offset = finalOffset;
-        return offset;
+        int newOffset = SerializationHelpers.AlignBackwards(offset - bytesNeeded, alignment);
+
+        this.offset = newOffset;
+        return newOffset;
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)] // Common method; don't inline
