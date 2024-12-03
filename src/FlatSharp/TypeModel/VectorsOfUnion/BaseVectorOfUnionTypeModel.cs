@@ -123,12 +123,12 @@ public abstract class BaseVectorOfUnionTypeModel : RuntimeTypeModel
         string body = $@"
             int count = {context.ValueVariableName}.{this.LengthPropertyName};
             int discriminatorVectorOffset = {context.SerializationContextVariableName}.{nameof(SerializationContext.AllocateVector)}(sizeof(byte), count, sizeof(byte));
-            {context.SpanWriterVariableName}.{nameof(SpanWriterExtensions.WriteUOffset)}({context.SpanVariableName}, {context.OffsetVariableName}.offset0, discriminatorVectorOffset);
+            {context.SpanWriterVariableName}.{nameof(SpanWriterExtensions.WriteUOffset)}({context.SpanVariableName}, discriminatorVectorOffset, {context.OffsetVariableName}.offset0);
             {context.SpanWriterVariableName}.{nameof(SpanWriter.WriteInt)}({context.SpanVariableName}, count, discriminatorVectorOffset);
             discriminatorVectorOffset += sizeof(int);
 
             int offsetVectorOffset = {context.SerializationContextVariableName}.{nameof(SerializationContext.AllocateVector)}(sizeof(int), count, sizeof(int));
-            {context.SpanWriterVariableName}.{nameof(SpanWriterExtensions.WriteUOffset)}({context.SpanVariableName}, {context.OffsetVariableName}.offset1, offsetVectorOffset);
+            {context.SpanWriterVariableName}.{nameof(SpanWriterExtensions.WriteUOffset)}({context.SpanVariableName}, offsetVectorOffset, {context.OffsetVariableName}.offset1);
             {context.SpanWriterVariableName}.{nameof(SpanWriter.WriteInt)}({context.SpanVariableName}, count, offsetVectorOffset);
             offsetVectorOffset += sizeof(int);
 
