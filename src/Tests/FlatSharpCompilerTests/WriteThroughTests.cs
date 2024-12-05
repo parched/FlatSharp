@@ -43,8 +43,7 @@ public class WriteThroughTests
             table.Struct.Foo = 42;
             table.Struct.Bar = 65;
 
-            byte[] data = new byte[100];
-            serializer.Write(data, (object)table);
+            var data = serializer.WriteToMemory((object)table);
 
             dynamic parsed = serializer.Parse(data);
             parsed.Struct.Foo = 100;

@@ -37,9 +37,8 @@ public class DeserializationModesTests
 
         var item = Activator.CreateInstance(t);
         ISerializer serializer = (ISerializer)t.GetProperty("Serializer", BindingFlags.Public | BindingFlags.Static).GetValue(null);
-        byte[] buffer = new byte[100];
 
-        serializer.Write(buffer, item);
+        var buffer = serializer.WriteToMemory(item);
 
         foreach (FlatBufferDeserializationOption option in Enum.GetValues<FlatBufferDeserializationOption>())
         {
