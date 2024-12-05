@@ -47,8 +47,7 @@ public class RequiredTests
         ISerializer nonRequiredSerializer = (ISerializer)nonRequiredTable.GetProperty("Serializer", BindingFlags.Public | BindingFlags.Static).GetValue(null);
         dynamic nonRequiredItem = Activator.CreateInstance(nonRequiredTable);
 
-        byte[] buffer = new byte[1024];
-        nonRequiredSerializer.Write(buffer, (object)nonRequiredItem);
+        var buffer = nonRequiredSerializer.WriteToMemory((object)nonRequiredItem);
 
         ISerializer serializer = (ISerializer)requiredTableType.GetProperty("Serializer", BindingFlags.Public | BindingFlags.Static).GetValue(null);
         dynamic parsed = serializer.Parse(buffer);

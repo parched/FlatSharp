@@ -167,10 +167,8 @@ public class StructVectorTests
             foo.V[i] = bar;
         }
 
-        byte[] data = new byte[1024];
-
         var serializer = CompilerTestHelpers.CompilerTestSerializer.Compile((object)table);
-        serializer.Write(data, (object)table);
+        var data = serializer.WriteToMemory((object)table);
         dynamic parsed = serializer.Parse(data);
         dynamic copy = Activator.CreateInstance(tableType, (object)parsed);
 
@@ -254,13 +252,11 @@ public class StructVectorTests
             foo.V[i] = GetRandom<T>();
         }
 
-        byte[] data = new byte[1024];
-
         var fbs = new FlatBufferSerializer(
              new FlatBufferSerializerOptions(option) { EnableAppDomainInterceptOnAssemblyLoad = true });
 
         var serializer = fbs.Compile((object)table);
-        serializer.Write(data, (object)table);
+        var data = serializer.WriteToMemory((object)table);
         dynamic parsed = serializer.Parse(data);
 
         dynamic copy = Activator.CreateInstance(tableType, (object)parsed);

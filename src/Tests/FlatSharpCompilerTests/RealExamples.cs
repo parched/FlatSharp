@@ -124,10 +124,9 @@ table TableThatStartsItAll {{
 
         Assert.Equal(arrayVectorType, monsterType.GetProperty("FakeVector2").PropertyType);
 
-        byte[] data = new byte[1024];
         ISerializer monsterSerializer = CompilerTestHelpers.CompilerTestSerializer.Compile(monster);
 
-        monsterSerializer.Write(data, monster);
+        var data = monsterSerializer.WriteToMemory(monster);
         var parsedMonster = monsterSerializer.Parse(data);
         Assert.NotEqual(parsedMonster.GetType(), monster.GetType());
 
