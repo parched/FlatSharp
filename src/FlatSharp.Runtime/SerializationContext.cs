@@ -36,6 +36,8 @@ public sealed class SerializationContext
     private readonly List<PostSerializeAction> postSerializeActions;
     private readonly List<int> vtableOffsets;
 
+    public Dictionary<object, int> ObjectOffsets { get; }= new Dictionary<object, int>(ReferenceEqualityComparer.Instance);
+
     /// <summary>
     /// Initializes a new serialization context.
     /// </summary>
@@ -70,6 +72,7 @@ public sealed class SerializationContext
         this.SharedStringWriter = null;
         this.postSerializeActions.Clear();
         this.vtableOffsets.Clear();
+        this.ObjectOffsets.Clear();
     }
 
     /// <summary>
@@ -185,4 +188,13 @@ public sealed class SerializationContext
             offsets[swapIndex] = temp;
         }
     }
+}
+
+internal sealed class ReferenceEqualityComparer : IEqualityComparer<object>
+{
+    public static readonly ReferenceEqualityComparer Instance = new ReferenceEqualityComparer();
+
+    public new bool Equals(object x, object y) => ReferenceEquals(x, y);
+
+    public int GetHashCode(object obj) => RuntimeHelpers.GetHashCode(obj);
 }

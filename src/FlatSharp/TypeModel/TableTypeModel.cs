@@ -487,6 +487,10 @@ public class TableTypeModel : RuntimeTypeModel
         var tableAlignment = items.Select(x => x.layout.Alignment).Append(vtableOffsetAlignment).Max();
         string methodStart =
 $@"
+            if (context.ObjectOffsets.TryGetValue({context.ValueVariableName}, out var existingOffset))
+            {{
+                return existingOffset;
+            }}
             int currentOffset = {sizeof(int)}; // skip past vtable soffset_t.
             int vtableLength = {minVtableLength};
             Span<byte> vtable = stackalloc byte[{4 + 2 * (maxIndex + 1)}];
@@ -522,6 +526,8 @@ $@"
 
         body.AddRange(writeBlocks);
         
+        body.Add($"context.ObjectOffsets.Add({context.ValueVariableName}, tableStart);");
+
         body.Add($"return tableStart;");
         
         // These methods are often enormous, and inlining can have a detrimental effect on perf.
