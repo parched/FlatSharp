@@ -218,4 +218,30 @@ public static class ISerializerExtensions
 
         return bytesWritten;
     }
+
+    /// <summary>
+    /// Allocates a buffer and writes the given item to the given buffer using the default SpanWriter.
+    /// </summary>
+    /// <returns>The serialized data.</returns>
+    [ExcludeFromCodeCoverage] // Just a helper
+    public static Memory<byte> WriteToMemory<T>(this ISerializer<T> serializer, T item) where T : class
+    {
+        int maxSize = serializer.GetMaxSize(item);
+        var buffer = new byte[maxSize];
+        int length = Write(serializer, buffer.AsSpan(), item);
+        return buffer.AsMemory(start: 0, length);
+    }
+
+    /// <summary>
+    /// Allocates a buffer and writes the given item to the given buffer using the default SpanWriter.
+    /// </summary>
+    /// <returns>The serialized data.</returns>
+    [ExcludeFromCodeCoverage] // Just a helper
+    public static Memory<byte> WriteToMemory(this ISerializer serializer, object item)
+    {
+        int maxSize = serializer.GetMaxSize(item);
+        var buffer = new byte[maxSize];
+        int length = Write(serializer, buffer.AsSpan(), item);
+        return buffer.AsMemory(start: 0, length);
+    }
 }

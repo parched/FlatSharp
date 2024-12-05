@@ -83,10 +83,8 @@ public class PrecompiledSerializerTests
         Assert.Equal(typeof(string), monsterType.GetProperty("Name").PropertyType);
         Assert.True(monsterType.GetProperty("Friendly").GetCustomAttribute<FlatBufferItemAttribute>().Deprecated);
 
-        byte[] data = new byte[1024];
-
         var compiled = CompilerTestHelpers.CompilerTestSerializer.Compile(monster);
-        compiled.Write(data, monster);
+        var data = compiled.WriteToMemory(monster);
         dynamic parsedMonster = compiled.Parse(data);
 
         Assert.Equal("Blue", parsedMonster.Color.ToString());

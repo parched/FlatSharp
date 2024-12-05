@@ -33,7 +33,7 @@ public static class SpanWriterExtensions
         int numberOfItems = memory.Length;
         int vectorStartOffset = ctx.AllocateVector(itemAlignment: sizeof(byte), numberOfItems, sizePerItem: sizeof(byte));
 
-        spanWriter.WriteUOffset(span, offset, vectorStartOffset);
+        spanWriter.WriteUOffset(span, vectorStartOffset, offset);
         spanWriter.WriteInt(span, numberOfItems, vectorStartOffset);
 
         memory.Span.CopyTo(span.Slice(vectorStartOffset + sizeof(uint)));
@@ -58,7 +58,7 @@ public static class SpanWriterExtensions
             numberOfItems,
             sizePerItem: Unsafe.SizeOf<TElement>());
 
-        spanWriter.WriteUOffset(span, offset, vectorStartOffset);
+        spanWriter.WriteUOffset(span, vectorStartOffset, offset);
         spanWriter.WriteInt(span, numberOfItems, vectorStartOffset);
 
         var start = span.Slice(vectorStartOffset + sizeof(uint), checked(numberOfItems * Unsafe.SizeOf<TElement>()));
@@ -78,7 +78,7 @@ public static class SpanWriterExtensions
         SerializationContext context) where TSpanWriter : ISpanWriter
     {
         int stringOffset = spanWriter.WriteAndProvisionString(span, value, context);
-        spanWriter.WriteUOffset(span, offset, stringOffset);
+        spanWriter.WriteUOffset(span, stringOffset, offset);
     }
 
     /// <summary>
@@ -109,12 +109,12 @@ public static class SpanWriterExtensions
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void WriteUOffset<TSpanWriter>(this TSpanWriter spanWriter, Span<byte> span, int offset, int secondOffset)
+    public static void WriteUOffset<TSpanWriter>(this TSpanWriter spanWriter, Span<byte> span, int offsetToWrite, int offset)
         where TSpanWriter : ISpanWriter
     {
         checked
         {
-            uint uoffset = (uint)(secondOffset - offset);
+            uint uoffset = (uint)(offsetToWrite - offset);
             spanWriter.WriteUInt(span, uoffset, offset);
         }
     }

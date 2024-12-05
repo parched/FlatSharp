@@ -192,7 +192,7 @@ public class SerializerConfigurationTests
 
                 for (int i = 0; i < kvp.Value.Count; ++i)
                 {
-                    writer.WriteUOffset(data, kvp.Value[i], stringOffset);
+                    writer.WriteUOffset(data, stringOffset, kvp.Value[i]);
                 }
             }
 
